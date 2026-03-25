@@ -8,7 +8,6 @@
 <body>
     <h1>Upload an Image (L or T)</h1>
 
-    <!-- Debugging and status -->
     <p id="loadingMessage">Loading model, please wait...</p>
     
     <input type="file" id="fileInput" accept="image/*"/>
@@ -24,45 +23,48 @@
     <py-script>
         import numpy as np
         from PIL import Image
-        from pyscript import load_npy
+        from pyodide.http import pyfetch
         from js import document
-        import io
-        import asyncio
+        import io, asyncio
 
-        # model variables
         weights = None
         bias = None
 
-        # Load model
+        async def fetch_npy(path):
+            """Fetch .npy and return a numpy array."""
+            resp = await pyfetch(path)
+            data = await resp.bytes()
+            return np.load(io.BytesIO(data))
+
         async def load_model_files():
             global weights, bias
             try:
-                weights = np.array(await load_npy("./weights.npy"))
-                bias = np.array(await load_npy("./bias.npy")).item()
+                # fetch the arrays
+                weights = await fetch_npy("./weights.npy")
+                bias_arr = await fetch_npy("./bias.npy")
+                bias = float(bias_arr)
+
                 print("Model loaded successfully.")
                 print("weights shape:", weights.shape, "bias:", bias)
-                
-                # Enable classify button after load
+
                 document.getElementById("classifyBtn").disabled = False
                 document.getElementById("loadingMessage").style.display = "none"
+
             except Exception as e:
                 document.getElementById("loadingMessage").innerText = f"Error loading model: {e}"
                 print("Error loading model:", e)
 
+        # start loading immediately
         asyncio.create_task(load_model_files())
 
         def preprocess(image):
-            image = image.convert("L").resize((20,20))
-            arr = np.array(image)/255.0
-            print("Preprocessed image shape:", arr.shape)
+            image = image.convert("L").resize((20, 20))
+            arr = np.array(image) / 255.0
             return arr.flatten()
-        
-        def activation_function(x):
-            return np.where(x >= 0, 1, 0)
 
         def predict_proba(x):
             z = np.dot(x, weights) + bias
-            prob_1 = 1 / (1 + np.exp(-z))   # sigmoid
+            prob_1 = 1 / (1 + np.exp(-z))
             prob_0 = 1 - prob_1
             return prob_0, prob_1
 
@@ -76,25 +78,20 @@
             try:
                 file_bytes = await file.arrayBuffer()
                 image = Image.open(io.BytesIO(file_bytes.to_py()))
-                
-                # Preprocess
+
                 x = preprocess(image)
-                
-                # Prediction
-                y_pred = activation_function(np.dot(x, weights) + bias).item()
+
+                z = np.dot(x, weights) + bias
+                y_pred = 1 if z >= 0 else 0
                 label = "T" if y_pred == 1 else "L"
-                
-                # Probabilities
+
                 prob_0, prob_1 = predict_proba(x)
 
-                # Output
                 document.getElementById("output").innerText = f"Prediction: {label}"
-                document.getElementById("probabilities").innerText = f"Probabilities -> L: {prob_0:.2f}, T: {prob_1:.2f}"
+                document.getElementById("probabilities").innerText = f"Probabilities → L: {prob_0:.2f}, T: {prob_1:.2f}"
 
-                # Debug prints
-                print("Linear output:", np.dot(x, weights) + bias)
+                print("Linear output:", z)
                 print("Prediction:", label)
-                print("Probabilities:", prob_0, prob_1)
 
             except Exception as e:
                 document.getElementById("output").innerText = f"Error during classification: {e}"
