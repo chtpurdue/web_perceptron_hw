@@ -36,33 +36,28 @@
         # Load model files
         async def load_model_files():
             global weights, bias
+            try:
+                weights = np.array(await load_npy("./weights.npy"))
+                bias = np.array(await load_npy("./bias.npy")).item()
+                print("Model loaded successfully.")
+                print("weights shape:", weights.shape, "bias:", bias)
+                
+                # Enable classify button after load
+                document.getElementById("classifyBtn").disabled = False
+                document.getElementById("loadingMessage").style.display = "none"
+            except Exception as e:
+                document.getElementById("loadingMessage").innerText = f"Error loading model: {e}"
+                print("Error loading model:", e)
         
-            # Load weights
-            response_w = await fetch("./weights.npy")
-            buf_w = await response_w.arrayBuffer()
-            weights = np.load(io.BytesIO(buf_w.to_py()), allow_pickle=True)
-        
-            # Load bias
-            response_b = await fetch("./bias.npy")
-            buf_b = await response_b.arrayBuffer()
-            bias = np.load(io.BytesIO(buf_b.to_py()), allow_pickle=True)
-        
-            # Enable classify button
-            document.getElementById("classifyBtn").disabled = False
-            document.getElementById("loadingMessage").style.display = "none"
-        
-        # Start loading model immediately
         asyncio.create_task(load_model_files())
 
         def activation_function(x):
             return np.where(x >= 0, 1, 0)
 
         def predict_proba(x):
-            linear_output = np.dot(x, weights) + bias
-            exp0 = np.exp(-linear_output)
-            exp1 = np.exp(linear_output)
-            prob_0 = exp0 / (exp0 + exp1)
-            prob_1 = exp1 / (exp0 + exp1)
+            z = np.dot(x, weights) + bias
+            prob_1 = 1 / (1 + np.exp(-z))
+            prob_0 = 1 - prob_1
             return prob_0, prob_1
 
         def preprocess(image):
@@ -78,18 +73,33 @@
                 document.getElementById("output").innerText = "No file selected!"
                 return
 
-            file_bytes = await file.arrayBuffer()
-            file_bytes = file_bytes.to_py()
-            image = Image.open(io.BytesIO(file_bytes))
-            x = preprocess(image)
-        
-            y_pred = activation_function(np.dot(x, weights) + bias)
-            label = "T" if y_pred == 1 else "L"
-        
-            prob_0, prob_1 = predict_proba(x)
-        
-            document.getElementById("output").innerText = f"Prediction: {label}"
-            document.getElementById("probabilities").innerText = f"Probabilities -> L: {prob_0:.2f}, T: {prob_1:.2f}"
+            try:
+                # Convert JS file to Python bytes
+                file_bytes = await file.arrayBuffer()
+                image = Image.open(io.BytesIO(file_bytes.to_py()))
+                
+                # Preprocess
+                x = preprocess(image)
+                
+                # Prediction
+                y_pred = activation_function(np.dot(x, weights) + bias).item()
+                label = "T" if y_pred == 1 else "L"
+                
+                # Probabilities
+                prob_0, prob_1 = predict_proba(x)
+
+                # Output
+                document.getElementById("output").innerText = f"Prediction: {label}"
+                document.getElementById("probabilities").innerText = f"Probabilities -> L: {prob_0:.2f}, T: {prob_1:.2f}"
+
+                # Debug prints
+                print("Linear output:", np.dot(x, weights) + bias)
+                print("Prediction:", label)
+                print("Probabilities:", prob_0, prob_1)
+
+            except Exception as e:
+                document.getElementById("output").innerText = f"Error during classification: {e}"
+                print("Classification error:", e)
     </py-script>
 </body>
 </html>
