@@ -93,7 +93,10 @@
                 print("Classification error:", e)
         
         btn = document.getElementById("classifyBtn")
-        btn.addEventListener("click", lambda e: asyncio.create_task(classify()))
+        def click_handler(e):
+            # wrap async call in asyncio.create_task
+            asyncio.create_task(classify())
+        btn.addEventListener("click", click_handler)
         
         asyncio.create_task(load_model())
     </py-script>
