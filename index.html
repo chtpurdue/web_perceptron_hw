@@ -8,7 +8,7 @@
 <body>
     <h1>Upload an Image (L or T)</h1>
     <input type="file" id="fileInput" accept="image/*"/>
-    <button py-click="classify()">Classify</button>
+    <button id="classifyBtn" py-click="classify()" disabled>Classify</button>
 
     <p id="output"></p>
     <p id="probabilities"></p>
@@ -72,6 +72,12 @@
 
             document.getElementById("output").innerText = f"Prediction: {label}"
             document.getElementById("probabilities").innerText = f"Probabilities -> L: {prob_0:.2f}, T: {prob_1:.2f}"
+
+        # --- Enable button after PyScript fully loads ---
+        def on_loaded(*args, **kwargs):
+            document.getElementById("classifyBtn").disabled = False
+
+        document.addEventListener("py-loaded", on_loaded)
     </py-script>
 </body>
 </html>
