@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>L or T call it</title>
+    <title>L or T Classifier</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css" />
     <script type="module" src="https://pyscript.net/releases/2026.3.1/core.js"></script>
     <style>
@@ -22,31 +22,60 @@
 
     <py-config type="toml">
         packages = ["numpy","pillow"]
-        files = ["weights.npy","bias.npy"]
     </py-config>
 
     <py-script>
         import numpy as np
         from PIL import Image
+        from pyodide.http import pyfetch
         from js import document
-        import io
+        import io, asyncio
         
-        # load model
-        weights = np.load("weights.npy")
-        bias = float(np.load("bias.npy").item())
-        print("Model loaded:", "weights shape:", weights.shape, "bias:", bias)
+        # Model variables
+        weights = None
+        bias = None
         
+        # Async fetch for .npy files (works on GitHub Pages)
+        async def fetch_npy(path):
+            resp = await pyfetch(path)
+            if resp.status != 200:
+                raise RuntimeError(f"Failed to fetch {path} (HTTP {resp.status})")
+            data = await resp.bytes()
+            return np.load(io.BytesIO(data))
+        
+        # Load perceptron model
+        async def load_model():
+            global weights, bias
+            try:
+                weights = await fetch_npy("weights.npy")
+                bias_arr = await fetch_npy("bias.npy")
+                bias = float(bias_arr.item())  # safe scalar extraction
+        
+                document.getElementById("classifyBtn").disabled = False
+                document.getElementById("loadingMessage").style.display = "none"
+                print("Model loaded successfully:", "weights shape:", weights.shape, "bias:", bias)
+            except Exception as e:
+                document.getElementById("loadingMessage").innerText = f"Error loading model: {e}"
+                print("Model load error:", e)
+        
+        # Preprocess image to 20x20 grayscale, flattened
         def preprocess(image):
             img_array = np.array(image.convert("L").resize((20,20)))
             return img_array.flatten() / 255.0
         
+        # Compute probabilities using sigmoid
         def predict_proba(x):
             z = np.dot(x, weights) + bias
             prob_1 = 1 / (1 + np.exp(-z))
             prob_0 = 1 - prob_1
             return prob_0, prob_1
         
-        def classify_py():
+        # Classify image
+        async def classify():
+            if weights is None or bias is None:
+                document.getElementById("output").innerText = "Model not loaded yet!"
+                return
+        
             file_input = document.getElementById("fileInput")
             file = file_input.files.item(0)
             if not file:
@@ -55,39 +84,34 @@
                 return
         
             try:
-                # read file bytes
-                data = file.arrayBuffer().to_py()
-                img = Image.open(io.BytesIO(data))
-                x = preprocess(img)
+                file_bytes = await file.arrayBuffer()
+                image = Image.open(io.BytesIO(file_bytes.to_py()))
+                x = preprocess(image)
         
-                # predict
                 z = np.dot(x, weights) + bias
                 y_pred = 1 if z >= 0 else 0
                 label = "T" if y_pred == 1 else "L"
         
-                # probabilities
                 prob_0, prob_1 = predict_proba(x)
         
-                # output
                 document.getElementById("output").innerText = f"Prediction: {label}"
                 document.getElementById("probabilities").innerText = f"Probabilities → L: {prob_0:.2f}, T: {prob_1:.2f}"
         
                 print("Linear output:", z, "Prediction:", label, "Probabilities:", prob_0, prob_1)
-        
             except Exception as e:
                 document.getElementById("output").innerText = f"Error during classification: {e}"
                 document.getElementById("probabilities").innerText = ""
                 print("Classification error:", e)
         
+        # Bind classify function safely for button click
         from pyodide import globals
-        globals.set("classify_py", classify_py)
+        globals.set("classify_async", classify)
         
         btn = document.getElementById("classifyBtn")
-        btn.disabled = False
-        btn.addEventListener("click", lambda e: classify_py())
+        btn.addEventListener("click", lambda e: asyncio.create_task(classify_async()))
         
-        # hide loading message
-        document.getElementById("loadingMessage").style.display = "none"
+        # Start loading model immediately
+        asyncio.create_task(load_model())
     </py-script>
 </body>
 </html>
