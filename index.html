@@ -19,12 +19,16 @@
 
     <py-script>
         import numpy as np
+        import io
+        import urllib.request
         from PIL import Image
         from js import document
 
         # --- Load model weights ---
-        weights = np.load("weights.npy")
-        bias = np.load("bias.npy")
+        with urllib.request.urlopen("weights.npy") as f:
+            weights = np.load(io.BytesIO(f.read()))
+        with urllib.request.urlopen("bias.npy") as f:
+            bias = np.load(io.BytesIO(f.read()))
 
         # --- Helper functions ---
         def activation_function(x):
