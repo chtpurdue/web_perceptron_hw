@@ -31,11 +31,9 @@
         from js import document
         import io, asyncio
         
-        # Model variables
         weights = None
         bias = None
         
-        # Async fetch for .npy files (works on GitHub Pages)
         async def fetch_npy(path):
             resp = await pyfetch(path)
             if resp.status != 200:
@@ -43,74 +41,60 @@
             data = await resp.bytes()
             return np.load(io.BytesIO(data))
         
-        # Load perceptron model
         async def load_model():
             global weights, bias
             try:
                 weights = await fetch_npy("weights.npy")
                 bias_arr = await fetch_npy("bias.npy")
-                bias = float(bias_arr.item())  # safe scalar extraction
-        
-                document.getElementById("classifyBtn").disabled = False
+                bias = float(bias_arr.item())
+                # Enable button and hide loading message
+                btn = document.getElementById("classifyBtn")
+                btn.disabled = False
                 document.getElementById("loadingMessage").style.display = "none"
-                print("Model loaded successfully:", "weights shape:", weights.shape, "bias:", bias)
+                print("Model loaded successfully")
             except Exception as e:
                 document.getElementById("loadingMessage").innerText = f"Error loading model: {e}"
-                print("Model load error:", e)
+                print("Error loading model:", e)
         
-        # Preprocess image to 20x20 grayscale, flattened
         def preprocess(image):
             img_array = np.array(image.convert("L").resize((20,20)))
             return img_array.flatten() / 255.0
         
-        # Compute probabilities using sigmoid
         def predict_proba(x):
             z = np.dot(x, weights) + bias
             prob_1 = 1 / (1 + np.exp(-z))
             prob_0 = 1 - prob_1
             return prob_0, prob_1
         
-        # Classify image
         async def classify():
             if weights is None or bias is None:
                 document.getElementById("output").innerText = "Model not loaded yet!"
                 return
-        
             file_input = document.getElementById("fileInput")
             file = file_input.files.item(0)
             if not file:
                 document.getElementById("output").innerText = "No file selected!"
                 document.getElementById("probabilities").innerText = ""
                 return
-        
             try:
                 file_bytes = await file.arrayBuffer()
                 image = Image.open(io.BytesIO(file_bytes.to_py()))
                 x = preprocess(image)
-        
                 z = np.dot(x, weights) + bias
                 y_pred = 1 if z >= 0 else 0
                 label = "T" if y_pred == 1 else "L"
-        
                 prob_0, prob_1 = predict_proba(x)
-        
                 document.getElementById("output").innerText = f"Prediction: {label}"
                 document.getElementById("probabilities").innerText = f"Probabilities → L: {prob_0:.2f}, T: {prob_1:.2f}"
-        
                 print("Linear output:", z, "Prediction:", label, "Probabilities:", prob_0, prob_1)
             except Exception as e:
                 document.getElementById("output").innerText = f"Error during classification: {e}"
                 document.getElementById("probabilities").innerText = ""
                 print("Classification error:", e)
         
-        # Bind classify function safely for button click
-        from pyodide import globals
-        globals.set("classify_async", classify)
-        
         btn = document.getElementById("classifyBtn")
-        btn.addEventListener("click", lambda e: asyncio.create_task(classify_async()))
+        btn.addEventListener("click", lambda e: asyncio.create_task(classify()))
         
-        # Start loading model immediately
         asyncio.create_task(load_model())
     </py-script>
 </body>
