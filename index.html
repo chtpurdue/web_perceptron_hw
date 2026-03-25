@@ -31,7 +31,6 @@
         bias = None
 
         async def fetch_npy(path):
-            """Fetch .npy and return a numpy array."""
             resp = await pyfetch(path)
             data = await resp.bytes()
             return np.load(io.BytesIO(data))
@@ -39,22 +38,19 @@
         async def load_model_files():
             global weights, bias
             try:
-                # fetch the arrays
                 weights = await fetch_npy("./weights.npy")
                 bias_arr = await fetch_npy("./bias.npy")
-                bias = float(bias_arr)
-
-                print("Model loaded successfully.")
-                print("weights shape:", weights.shape, "bias:", bias)
+                bias = float(bias_arr.item())  # ✅ safe extraction of scalar
 
                 document.getElementById("classifyBtn").disabled = False
                 document.getElementById("loadingMessage").style.display = "none"
+
+                print("Model loaded successfully:", "weights shape:", weights.shape, "bias:", bias)
 
             except Exception as e:
                 document.getElementById("loadingMessage").innerText = f"Error loading model: {e}"
                 print("Error loading model:", e)
 
-        # start loading immediately
         asyncio.create_task(load_model_files())
 
         def preprocess(image):
@@ -69,6 +65,11 @@
             return prob_0, prob_1
 
         async def classify():
+            global weights, bias
+            if weights is None or bias is None:
+                document.getElementById("output").innerText = "Model not loaded yet!"
+                return
+
             file_input = document.getElementById("fileInput")
             file = file_input.files.item(0)
             if not file:
@@ -78,7 +79,6 @@
             try:
                 file_bytes = await file.arrayBuffer()
                 image = Image.open(io.BytesIO(file_bytes.to_py()))
-
                 x = preprocess(image)
 
                 z = np.dot(x, weights) + bias
@@ -90,8 +90,7 @@
                 document.getElementById("output").innerText = f"Prediction: {label}"
                 document.getElementById("probabilities").innerText = f"Probabilities → L: {prob_0:.2f}, T: {prob_1:.2f}"
 
-                print("Linear output:", z)
-                print("Prediction:", label)
+                print("Linear output:", z, "Prediction:", label, "Probabilities:", prob_0, prob_1)
 
             except Exception as e:
                 document.getElementById("output").innerText = f"Error during classification: {e}"
