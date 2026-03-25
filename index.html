@@ -24,7 +24,7 @@
     <py-script>
         import numpy as np
         from PIL import Image
-        from pyscript import load_npy
+        from pyscript import fetch
         from js import document
         import io
         import asyncio
@@ -36,11 +36,22 @@
         # Load model files
         async def load_model_files():
             global weights, bias
-            weights = await load_npy("./weights.npy")
-            bias = await load_npy("./bias.npy")
+        
+            # Load weights
+            response_w = await fetch("./weights.npy")
+            buf_w = await response_w.arrayBuffer()
+            weights = np.load(io.BytesIO(buf_w.to_py()), allow_pickle=True)
+        
+            # Load bias
+            response_b = await fetch("./bias.npy")
+            buf_b = await response_b.arrayBuffer()
+            bias = np.load(io.BytesIO(buf_b.to_py()), allow_pickle=True)
+        
+            # Enable classify button
             document.getElementById("classifyBtn").disabled = False
             document.getElementById("loadingMessage").style.display = "none"
         
+        # Start loading model immediately
         asyncio.create_task(load_model_files())
 
         def activation_function(x):
@@ -68,7 +79,8 @@
                 return
 
             file_bytes = await file.arrayBuffer()
-            image = Image.open(io.BytesIO(file_bytes.to_py()))
+            file_bytes = file_bytes.to_py()
+            image = Image.open(io.BytesIO(file_bytes))
             x = preprocess(image)
         
             y_pred = activation_function(np.dot(x, weights) + bias)
