@@ -8,7 +8,7 @@
 <body>
     <h1>Upload an Image (L or T)</h1>
 
-    <!-- Debugging got really annoying. adding this for clarity -->
+    <!-- Debugging and status -->
     <p id="loadingMessage">Loading model, please wait...</p>
     
     <input type="file" id="fileInput" accept="image/*"/>
@@ -29,11 +29,11 @@
         import io
         import asyncio
 
-        # Model variables
+        # model variables
         weights = None
         bias = None
-        
-        # Load model files
+
+        # Load model
         async def load_model_files():
             global weights, bias
             try:
@@ -48,24 +48,24 @@
             except Exception as e:
                 document.getElementById("loadingMessage").innerText = f"Error loading model: {e}"
                 print("Error loading model:", e)
-        
+
         asyncio.create_task(load_model_files())
 
+        def preprocess(image):
+            image = image.convert("L").resize((20,20))
+            arr = np.array(image)/255.0
+            print("Preprocessed image shape:", arr.shape)
+            return arr.flatten()
+        
         def activation_function(x):
             return np.where(x >= 0, 1, 0)
 
         def predict_proba(x):
             z = np.dot(x, weights) + bias
-            prob_1 = 1 / (1 + np.exp(-z))
+            prob_1 = 1 / (1 + np.exp(-z))   # sigmoid
             prob_0 = 1 - prob_1
             return prob_0, prob_1
 
-        def preprocess(image):
-            image = image.convert("L").resize((20,20))
-            arr = np.array(image)/255.0
-            return arr.flatten()
-
-        # Main function triggered by button
         async def classify():
             file_input = document.getElementById("fileInput")
             file = file_input.files.item(0)
@@ -74,7 +74,6 @@
                 return
 
             try:
-                # Convert JS file to Python bytes
                 file_bytes = await file.arrayBuffer()
                 image = Image.open(io.BytesIO(file_bytes.to_py()))
                 
