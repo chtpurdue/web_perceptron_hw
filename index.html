@@ -12,7 +12,7 @@
     <p id="loadingMessage">Loading model, please wait...</p>
     
     <input type="file" id="fileInput" accept="image/*"/>
-    <button id="classifyBtn" py-click="classify()" disabled>Classify</button>
+    <button id="classifyBtn" py-click="async classify()" disabled>Classify</button>
 
     <p id="output"></p>
     <p id="probabilities"></p>
@@ -24,45 +24,30 @@
     <py-script>
         import numpy as np
         from PIL import Image
-        from pyscript import fetch
-        from js import document, FileReader
+        from pyscript import load_npy
+        from js import document
         import io
         import asyncio
 
-        # --- Model variables ---
+        # Model variables
         weights = None
         bias = None
         
-        # --- Load model files asynchronously ---
+        # Load model files
         async def load_model_files():
             global weights, bias
-        
-            # Load weights
-            data_w = await fetch("./weights.npy")
-            buf_w = io.BytesIO(await data_w.arrayBuffer())
-            weights = np.load(buf_w, allow_pickle=True)
-        
-            # Load bias
-            data_b = await fetch("./bias.npy")
-            buf_b = io.BytesIO(await data_b.arrayBuffer())
-            bias = np.load(buf_b, allow_pickle=True)
-        
-            # Enable classify button
+            weights = await load_npy("./weights.npy")
+            bias = await load_npy("./bias.npy")
             document.getElementById("classifyBtn").disabled = False
             document.getElementById("loadingMessage").style.display = "none"
         
-        # Start loading model immediately
         asyncio.create_task(load_model_files())
 
-        # --- Helper functions ---
         def activation_function(x):
             return np.where(x >= 0, 1, 0)
 
         def predict_proba(x):
-            """Return probability-like confidence for each class"""
-            # Linear output
             linear_output = np.dot(x, weights) + bias
-            # Map to pseudo-probabilities (softmax-like)
             exp0 = np.exp(-linear_output)
             exp1 = np.exp(linear_output)
             prob_0 = exp0 / (exp0 + exp1)
@@ -70,12 +55,11 @@
             return prob_0, prob_1
 
         def preprocess(image):
-            """Convert image to 20x20 grayscale flattened array"""
             image = image.convert("L").resize((20,20))
             arr = np.array(image)/255.0
             return arr.flatten()
 
-        # --- Main function triggered by button ---
+        # Main function triggered by button
         async def classify():
             file_input = document.getElementById("fileInput")
             file = file_input.files.item(0)
@@ -83,25 +67,15 @@
                 document.getElementById("output").innerText = "No file selected!"
                 return
 
-            reader = FileReader.new()
-            fut = asyncio.get_event_loop().create_future()
-            def onload(evt):
-                fut.set_result(evt.target.result.to_py())
-            reader.onload = onload
-            reader.readAsArrayBuffer(file)
-            file_bytes = await fut
-        
-            # Open image
-            image = Image.open(file)
+            file_bytes = await file.arrayBuffer()
+            image = Image.open(io.BytesIO(file_bytes.to_py()))
             x = preprocess(image)
-
-            # Predict label
+        
             y_pred = activation_function(np.dot(x, weights) + bias)
             label = "T" if y_pred == 1 else "L"
-
-            # Predict probabilities
+        
             prob_0, prob_1 = predict_proba(x)
-
+        
             document.getElementById("output").innerText = f"Prediction: {label}"
             document.getElementById("probabilities").innerText = f"Probabilities -> L: {prob_0:.2f}, T: {prob_1:.2f}"
     </py-script>
