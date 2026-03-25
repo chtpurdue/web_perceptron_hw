@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>L or T Classifier</title>
+    <title>L or T call it</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css" />
     <script type="module" src="https://pyscript.net/releases/2026.3.1/core.js"></script>
     <style>
@@ -66,31 +66,44 @@
             prob_0 = 1 - prob_1
             return prob_0, prob_1
         
-        async def classify():
-            if weights is None or bias is None:
-                document.getElementById("output").innerText = "Model not loaded yet!"
+        def classify():
+            global weights, bias
+        
+            if weights is None:
+                document.getElementById("output").innerText = "Model not loaded"
                 return
+        
             file_input = document.getElementById("fileInput")
             file = file_input.files.item(0)
+        
             if not file:
-                document.getElementById("output").innerText = "No file selected!"
-                document.getElementById("probabilities").innerText = ""
+                document.getElementById("output").innerText = "No file selected"
                 return
+        
             try:
-                file_bytes = await file.arrayBuffer()
-                image = Image.open(io.BytesIO(file_bytes.to_py()))
+                # NOTE: synchronous read (this is the trick)
+                buffer = file.arrayBuffer()
+                data = buffer.to_py()
+        
+                image = Image.open(io.BytesIO(data))
                 x = preprocess(image)
+        
                 z = np.dot(x, weights) + bias
-                y_pred = 1 if z >= 0 else 0
-                label = "T" if y_pred == 1 else "L"
-                prob_0, prob_1 = predict_proba(x)
+                y = 1 if z >= 0 else 0
+        
+                label = "T" if y == 1 else "L"
+        
+                prob_1 = 1 / (1 + np.exp(-z))
+                prob_0 = 1 - prob_1
+        
                 document.getElementById("output").innerText = f"Prediction: {label}"
-                document.getElementById("probabilities").innerText = f"Probabilities → L: {prob_0:.2f}, T: {prob_1:.2f}"
-                print("Linear output:", z, "Prediction:", label, "Probabilities:", prob_0, prob_1)
+                document.getElementById("probabilities").innerText = f"L: {prob_0:.2f}  T: {prob_1:.2f}"
+        
+                print("WORKED:", label)
+        
             except Exception as e:
-                document.getElementById("output").innerText = f"Error during classification: {e}"
-                document.getElementById("probabilities").innerText = ""
-                print("Classification error:", e)
+                document.getElementById("output").innerText = str(e)
+                print("CLASSIFY ERROR:", e)
         
         btn = document.getElementById("classifyBtn")
         def click_handler(e):
