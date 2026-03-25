@@ -1,13 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>L or T call it</title>
+    <title>L or T Classifier</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css" />
     <script type="module" src="https://pyscript.net/releases/2026.3.1/core.js"></script>
-    <style>
-        body { font-family: sans-serif; padding: 2rem; }
-        #classifyBtn { margin-top: 1rem; }
-    </style>
 </head>
 <body>
     <h1>Upload an Image (L or T)</h1>
@@ -15,7 +11,7 @@
     <p id="loadingMessage">Loading model, please wait...</p>
 
     <input id="fileInput" type="file" accept="image/*"/>
-    <button id="classifyBtn" disabled>Classify</button>
+    <button id="classifyBtn" py-click="classify" disabled>Classify</button>
 
     <p id="output"></p>
     <p id="probabilities"></p>
@@ -34,31 +30,29 @@
         weights = None
         bias = None
         
-        async def fetch_npy(path):
-            resp = await pyfetch(path)
-            if resp.status != 200:
-                raise RuntimeError(f"Failed to fetch {path} (HTTP {resp.status})")
-            data = await resp.bytes()
-            return np.load(io.BytesIO(data))
-        
         async def load_model():
             global weights, bias
             try:
-                weights = await fetch_npy("weights.npy")
-                bias_arr = await fetch_npy("bias.npy")
-                bias = float(bias_arr.item())
-                # Enable button and hide loading message
-                btn = document.getElementById("classifyBtn")
-                btn.disabled = False
+                w_resp = await pyfetch("weights.npy")
+                b_resp = await pyfetch("bias.npy")
+        
+                weights = np.load(io.BytesIO(await w_resp.bytes()))
+                bias = float(np.load(io.BytesIO(await b_resp.bytes())).item())
+        
                 document.getElementById("loadingMessage").style.display = "none"
-                print("Model loaded successfully")
+                document.getElementById("classifyBtn").disabled = False
+        
+                print("MODEL LOADED")
             except Exception as e:
-                document.getElementById("loadingMessage").innerText = f"Error loading model: {e}"
-                print("Error loading model:", e)
+                document.getElementById("loadingMessage").innerText = str(e)
+                print("LOAD ERROR:", e)
+        
+        asyncio.create_task(load_model())
         
         def preprocess(image):
-            img_array = np.array(image.convert("L").resize((20,20)))
-            return img_array.flatten() / 255.0
+            img = image.convert("L").resize((20,20))
+            arr = np.array(img) / 255.0
+            return arr.flatten()
         
         def predict_proba(x):
             z = np.dot(x, weights) + bias
@@ -66,7 +60,7 @@
             prob_0 = 1 - prob_1
             return prob_0, prob_1
         
-        def classify():
+        async def classify(event=None):
             global weights, bias
         
             if weights is None:
@@ -81,20 +75,16 @@
                 return
         
             try:
-                # NOTE: synchronous read (this is the trick)
-                buffer = file.arrayBuffer()
-                data = buffer.to_py()
+                file_bytes = await file.arrayBuffer()
+                image = Image.open(io.BytesIO(file_bytes.to_py()))
         
-                image = Image.open(io.BytesIO(data))
                 x = preprocess(image)
         
                 z = np.dot(x, weights) + bias
                 y = 1 if z >= 0 else 0
-        
                 label = "T" if y == 1 else "L"
         
-                prob_1 = 1 / (1 + np.exp(-z))
-                prob_0 = 1 - prob_1
+                prob_0, prob_1 = predict_proba(x)
         
                 document.getElementById("output").innerText = f"Prediction: {label}"
                 document.getElementById("probabilities").innerText = f"L: {prob_0:.2f}  T: {prob_1:.2f}"
@@ -104,14 +94,6 @@
             except Exception as e:
                 document.getElementById("output").innerText = str(e)
                 print("CLASSIFY ERROR:", e)
-        
-        btn = document.getElementById("classifyBtn")
-        def click_handler(e):
-            # wrap async call in asyncio.create_task
-            asyncio.create_task(classify())
-        btn.addEventListener("click", click_handler)
-        
-        asyncio.create_task(load_model())
     </py-script>
 </body>
 </html>
