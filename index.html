@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>L or T call it</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css" />
+    <script type="module" src="https://pyscript.net/releases/2026.3.1/core.js"></script>
+</head>
+<body>
+    <h1>Upload an Image (L or T)</h1>
+    <input type="file" id="fileInput" accept="image/*"/>
+    <button py-click="classify()">Classify</button>
+
+    <p id="output"></p>
+    <p id="probabilities"></p>
+
+    <py-config type="toml">
+    packages = ["numpy", "pillow"]
+    </py-config>
+
+    <py-script>
+        import numpy as np
+        from PIL import Image
+        from js import document
+
+        # --- Load model weights ---
+        weights = np.load("weights.npy")
+        bias = np.load("bias.npy")
+
+        # --- Helper functions ---
+        def activation_function(x):
+            return np.where(x >= 0, 1, 0)
+
+        def predict_proba(x):
+            """Return probability-like confidence for each class"""
+            # Linear output
+            linear_output = np.dot(x, weights) + bias
+            # Map to pseudo-probabilities (softmax-like)
+            exp0 = np.exp(-linear_output)
+            exp1 = np.exp(linear_output)
+            prob_0 = exp0 / (exp0 + exp1)
+            prob_1 = exp1 / (exp0 + exp1)
+            return prob_0, prob_1
+
+        def preprocess(image):
+            """Convert image to 20x20 grayscale flattened array"""
+            image = image.convert("L").resize((20,20))
+            arr = np.array(image)/255.0
+            return arr.flatten()
+
+        # --- Main function triggered by button ---
+        def classify():
+            file_input = document.getElementById("fileInput")
+            file = file_input.files.item(0)
+            if not file:
+                document.getElementById("output").innerText = "No file selected!"
+                return
+
+            # Open image
+            image = Image.open(file)
+            x = preprocess(image)
+
+            # Predict label
+            y_pred = activation_function(np.dot(x, weights) + bias)
+            label = "T" if y_pred == 1 else "L"
+
+            # Predict probabilities
+            prob_0, prob_1 = predict_proba(x)
+
+            document.getElementById("output").innerText = f"Prediction: {label}"
+            document.getElementById("probabilities").innerText = f"Probabilities -> L: {prob_0:.2f}, T: {prob_1:.2f}"
+    </py-script>
+</body>
+</html>
