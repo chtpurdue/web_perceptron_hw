@@ -18,25 +18,34 @@
     <p id="probabilities"></p>
 
     <py-config type="toml">
-    packages = ["numpy", "pillow"]
-
-    [files]
-    "weights.npy" = "./weights.npy"
-    "bias.npy"   = "./bias.npy"
+        packages = ["numpy", "pillow"]
     </py-config>
 
     <py-script>
         import numpy as np
         from PIL import Image
+        from pyscript import fetch
         from js import document
 
         # --- Load model weights ---
-        try:
-            weights = np.load("weights.npy")
-            bias = np.load("bias.npy")
-        except Exception as e:
-            document.getElementById("output").innerText = f"Error loading model: {e}"
-            raise e
+        weights = None
+        bias = None
+
+        async def load_model_files():
+            global weights, bias
+            # fetch weights
+            data_w = await fetch("./weights.npy")
+            bin_w = await data_w.arrayBuffer()
+            weights = np.load(np.frombuffer(bin_w, dtype=np.uint8), allow_pickle=True)
+
+            # fetch bias
+            data_b = await fetch("./bias.npy")
+            bin_b = await data_b.arrayBuffer()
+            bias = np.load(np.frombuffer(bin_b, dtype=np.uint8), allow_pickle=True)
+
+            # enable classify button
+            document.getElementById("classifyBtn").disabled = False
+            document.getElementById("loadingMessage").style.display = "none"
 
         # --- Helper functions ---
         def activation_function(x):
@@ -80,13 +89,6 @@
 
             document.getElementById("output").innerText = f"Prediction: {label}"
             document.getElementById("probabilities").innerText = f"Probabilities -> L: {prob_0:.2f}, T: {prob_1:.2f}"
-
-        # --- Enable button after PyScript fully loads ---
-        def on_loaded(*args, **kwargs):
-            document.getElementById("classifyBtn").disabled = False
-            document.getElementById("loadingMessage").style.display = "none"
-
-        document.addEventListener("py:ready", on_loaded)
     </py-script>
 </body>
 </html>
