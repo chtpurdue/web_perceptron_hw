@@ -7,6 +7,10 @@
 </head>
 <body>
     <h1>Upload an Image (L or T)</h1>
+
+    <!-- Debugging got really annoying. adding this for clarity -->
+    <p id="loadingMessage">Loading model, please wait...</p>
+    
     <input type="file" id="fileInput" accept="image/*"/>
     <button id="classifyBtn" py-click="classify()" disabled>Classify</button>
 
@@ -76,6 +80,7 @@
         # --- Enable button after PyScript fully loads ---
         def on_loaded(*args, **kwargs):
             document.getElementById("classifyBtn").disabled = False
+            document.getElementById("loadingMessage").style.display = "none"
 
         document.addEventListener("py-loaded", on_loaded)
     </py-script>
