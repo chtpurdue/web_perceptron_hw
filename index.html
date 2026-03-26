@@ -87,7 +87,7 @@
                 prob_0, prob_1 = predict_proba(x)
         
                 document.getElementById("output").innerText = f"Prediction: {label}"
-                document.getElementById("probabilities").innerText = f"L: {prob_0:.2f}  T: {prob_1:.2f}"
+                document.getElementById("probabilities").innerText = f"L probability: {prob_0:.2f}  T probability: {prob_1:.2f}"
         
                 print("WORKED:", label)
         
